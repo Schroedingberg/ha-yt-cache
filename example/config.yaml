@@ -8,10 +8,14 @@ arch:
   - aarch64
   - amd64
 init: false
+apparmor: false
 map:
   - share:rw
 options:
   message: "Hello world..."
 schema:
   message: "str?"
-image: "ghcr.io/home-assistant/app-example"
+ports:
+  1667/tcp: 1667
+ports_description:
+  1667/tcp: Babashka nREPL

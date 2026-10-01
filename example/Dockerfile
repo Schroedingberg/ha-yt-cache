@@ -7,15 +7,15 @@ ARG TEMPIO_VERSION=2021.09.0
 ARG TARGETARCH
 RUN \
     if [ -z "${TARGETARCH}" ]; then \
-        echo "TARGETARCH is not set, please use Docker BuildKit for the build." && exit 1; \
+    echo "TARGETARCH is not set, please use Docker BuildKit for the build." && exit 1; \
     fi \
     && case "${TARGETARCH}" in \
-        amd64) tempio_arch="amd64" ;; \
-        arm64) tempio_arch="aarch64" ;; \
-        *) echo "Unsupported TARGETARCH: ${TARGETARCH}" && exit 1 ;; \
+    amd64) tempio_arch="amd64" ;; \
+    arm64) tempio_arch="aarch64" ;; \
+    *) echo "Unsupported TARGETARCH: ${TARGETARCH}" && exit 1 ;; \
     esac \
     && curl -sSLf -o /usr/bin/tempio \
-        "https://github.com/home-assistant/tempio/releases/download/${TEMPIO_VERSION}/tempio_${tempio_arch}"
+    "https://github.com/home-assistant/tempio/releases/download/${TEMPIO_VERSION}/tempio_${tempio_arch}"
 
 # Copy root filesystem
 COPY rootfs /
@@ -25,3 +25,11 @@ LABEL \
     org.opencontainers.image.description="Example app to use as a blueprint for new apps." \
     org.opencontainers.image.source="https://github.com/home-assistant/apps-example" \
     org.opencontainers.image.licenses="Apache License 2.0"
+
+
+# Install latest babashka release
+RUN curl -sSLf raw.githubusercontent.com/babashka/babashka/master/install | bash
+
+# Install latest uv in a directory available on PATH at runtime
+RUN curl -sSLf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin bash
+RUN apk add --no-cache deno ffmpeg sqlite
