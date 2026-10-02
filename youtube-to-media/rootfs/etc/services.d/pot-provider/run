@@ -1,0 +1,11 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Start the bgutil yt-dlp PO token provider (Node HTTP server on 127.0.0.1:4416)
+# ==============================================================================
+
+set -e
+
+cd /usr/share/bgutil-ytdlp-pot-provider/server
+bashio::log.info "Starting bgutil PO token provider on 127.0.0.1:4416"
+exec node build/main.js

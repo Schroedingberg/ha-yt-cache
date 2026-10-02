@@ -1,0 +1,9 @@
+#!/usr/bin/env bashio
+# ==============================================================================
+# Log when the PO token provider stops; do not halt the whole app.
+# yt-dlp falls back to bgutil script mode while this service is down.
+# ==============================================================================
+
+declare PROVIDER_EXIT_CODE=${1}
+
+bashio::log.warning "PO token provider stopped with exit code ${PROVIDER_EXIT_CODE}"
