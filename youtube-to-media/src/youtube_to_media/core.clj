@@ -54,8 +54,13 @@
   (set-job! id :state :downloading)
   (log-event! :download/started {:job-id id})
   (let [download-process (process {:out :stream :err :out}
-                                  "uvx" "--from" "yt-dlp[default]" "yt-dlp"
+                                  "uvx" "--from" "yt-dlp[default]"
+                                  "--with" "bgutil-ytdlp-pot-provider"
+                                  "yt-dlp"
                                   "--no-continue" "--newline"
+                                  "--js-runtimes" "node"
+                                  "--extractor-args" "youtube:player_client=mweb,web_embedded,web_safari"
+                                  "--extractor-args" "youtubepot-bgutilscript:server_home=/usr/share/bgutil-ytdlp-pot-provider/server"
                                   "-P" download-directory "--" (:url (@jobs id)))
         exit-code (:exit @download-process)
         state (if (zero? exit-code) :done :failed)]
