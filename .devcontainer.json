@@ -4,6 +4,7 @@
   "overrideCommand": false,
   "remoteUser": "vscode",
   "appPort": ["7123:8123", "7357:4357", "80:80", "1667:1667"],
+  "forwardPorts": [8099],
   "runArgs": ["-e", "GIT_EDITOR=code --wait", "--privileged"],
   "workspaceFolder": "/mnt/supervisor/apps/local/${localWorkspaceFolderBasename}",
   "workspaceMount": "source=${localWorkspaceFolder},target=${containerWorkspaceFolder},type=bind,consistency=cached",
@@ -13,7 +14,7 @@
   },
   "customizations": {
     "vscode": {
-      "extensions": ["timonwong.shellcheck", "esbenp.prettier-vscode"],
+      "extensions": ["betterthantomorrow.calva", "timonwong.shellcheck", "esbenp.prettier-vscode"],
       "settings": {
         "terminal.integrated.profiles.linux": {
           "zsh": {
@@ -28,6 +29,7 @@
       }
     }
   },
+  "postCreateCommand": "curl -sSLf https://raw.githubusercontent.com/babashka/babashka/master/install | bash -s -- --dir /home/vscode/.local/bin",
   "mounts": [
     "type=volume,target=/var/lib/docker",
     "type=volume,target=/var/lib/containerd",

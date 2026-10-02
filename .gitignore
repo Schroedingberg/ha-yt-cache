@@ -3,3 +3,4 @@
 share/youtube-to-media/.calva/repl.calva-repl
 .lsp/.cache/db.transit.json
 .clj-kondo/
+share/youtube-to-media/.nrepl-port

@@ -59,6 +59,19 @@
         "panel": "new"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "Start YouTube Media Server",
+      "type": "shell",
+      "command": "bb -m youtube-to-media.core",
+      "options": {
+        "cwd": "${workspaceFolder}/share/youtube-to-media"
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": []
     }
   ],
   "inputs": [
@@ -67,7 +80,7 @@
       "type": "pickString",
       "description": "Name of app (to add your app to this list, please edit .vscode/tasks.json)",
       "options": [
-        "example",
+        "example"
       ]
     }
   ]
