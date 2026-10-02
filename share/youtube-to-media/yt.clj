@@ -1,75 +1,92 @@
 (ns yt
-  (:require [babashka.fs :as fs]
-            [babashka.process :refer [sh process]]
-            [clojure.string :as str]
-            [clojure.edn :as edn]
-            [clojure.java.io :as io]
-            [babashka.pods :as pods]
-            [clojure.pprint :refer [pprint]]))
-
-(pods/load-pod 'org.babashka/go-sqlite3 "0.3.9")
-(require '[pod.babashka.go-sqlite3 :as sqlite])
+  (:require [babashka.process :refer [process]]
+            [babashka.http-client :as http]
+            [cheshire.core :as json]
+            [org.httpkit.server :as srv]
+            [clojure.java.io :as io]))
 
 
+(def download-directory "./")
+(def jobs   (atom {}))                      ; id -> {:url :state :progress :last}
+(def worker (agent nil :error-mode :continue)) ; one action at a time = the queue
 
-(def db-path "/share/youtube-to-media/downloads.db")
+(defn set-job! [id & kvs] (swap! jobs update id #(apply assoc % kvs)))
 
-(defn reset-db! []
-  (fs/create-dirs "/share/youtube-to-media")
-  (fs/delete-if-exists db-path)
-  (sqlite/execute! db-path
-                   [(slurp "/share/youtube-to-media/schema.sql")]))
+(defn notify! [job]                         ; HA event; user wires an automation to it
+  (try (http/post "http://supervisor/core/api/events/download_manager_finished"
+                  {:headers {"Authorization" (str "Bearer " (System/getenv "SUPERVISOR_TOKEN"))}
+                   :body (json/generate-string (select-keys job [:url :state :last]))})
+       (catch Exception _)))
 
-
-
-
-
-
-
-
-
-(def example-url "https://www.youtube.com/watch?v=0EqSXDwTq6U&pp=ygUOY2hhcmxpZSBiaXQgbWU%3D")
-
-
-
-(defn download-video-command [url]
-  [{:out :string
-    :err :string
-    :continue true}
-   "uvx" "--from" "yt-dlp[default]" "python" "-m" "yt_dlp"
-   "--no-continue"
-   url])
+(defn download! [id]
+  (set-job! id :state :downloading)
+  (let [p (process {:out :stream :err :out}  ; merged: one reader, no blocked pipe
+                   "uvx" "yt-dlp" "--no-continue" "--newline" "-P" download-directory
+                   "--" (:url (@jobs id)))]
+    (with-open [r (io/reader (:out p))]
+      (doseq [line (line-seq r)]
+        (if-let [[_ pct] (re-find #"(\d+(?:\.\d+)?)%" line)]
+          (set-job! id :progress (parse-double pct))
+          (set-job! id :last line))))
+    (set-job! id :state (if (zero? (:exit @p)) :done :failed))
+    (notify! (@jobs id))))
 
 
 
 
+(defn enqueue! [url]
+  (let [id (str (random-uuid))]
+    (swap! jobs assoc id {:url url :state :queued :progress 0})
+    (send-off worker (fn [_]
+                       (try (download! id)
+                            (catch Exception e (set-job! id :state :failed :last (ex-message e))))
+                       nil))
+    id))
 
+(def page "<!doctype html><meta charset=utf-8>
+<form onsubmit=\"fetch('enqueue',{method:'POST',body:u.value});u.value='';return false\">
+<input id=u size=60> <button>Add</button></form><pre id=o></pre>
+<script>setInterval(async()=>{o.textContent=(await(await fetch('jobs')).json())
+.map(x=>`${x.state} ${Math.round(x.progress)}% ${x.url} ${x.state=='failed'?x.last:''}`).join('\\n')},1500)</script>")
 
-(let [child (process {:err :out}
-                     "uvx" "--from" "yt-dlp[default]" "python" "-m" "yt_dlp" "--newline" "https://www.youtube.com/watch?v=T4P7DDxnMTo")
-      reader (future (with-open [rdr (io/reader (:out child))]
-                       (doseq [line (line-seq rdr)]
-                         (println line))))
-      {:keys [exit]} @child]
-  @reader
-  {:exit exit})
-
-
-(defn enqueue-download! [url]
-
-  (sqlite/execute! db-path ["INSERT INTO jobs (url, state) VALUES (?, ?)" url "queued"]))
-
+(defn handler [{:keys [uri request-method body]}]
+  (case [request-method uri]
+    [:get "/"]     {:headers {"Content-Type" "text/html"} :body page}
+    [:get "/jobs"] {:body (json/generate-string (vals @jobs))}
+    [:post "/enqueue"] (let [url (slurp body)]
+                         (if (re-find #"^https?://" url)
+                           {:status 202 :body (enqueue! url)}
+                           {:status 400 :body "invalid url"}))
+    {:status 404}))
 
 (comment
 
-  (reset-db!)
+  ;; start / stop the server by hand
+  (def server (srv/run-server handler {:port 8099}))
+  (server)                                   ; calling the returned fn stops it
 
-  (fs/list-dir "/share/youtube-to-media")
+  ;; enqueue a job and look at it
+  (def id (enqueue! "https://www.youtube.com/watch?v=jKeutbXLJ38&list=RDjKeutbXLJ38" ))
+  (@jobs id)
+  @jobs
 
-  (sqlite/query db-path ["SELECT * FROM jobs WHERE state = ?" "queued"])
+  ;; watch progress
+  (->> @jobs vals (map (juxt :state :progress)))
 
-  (sqlite/execute! db-path ["INSERT INTO jobs (url, state) VALUES (?, ?)" "https://www.youtube.com/watch?v=T4P7DDxnMTo" "queued"])
+  ;; run a download synchronously, bypassing the agent queue
+  (swap! jobs assoc "x" {:url "https://www.youtube.com/watch?v=T4P7DDxnMTo"
+                         :state :queued :progress 0})
+  (download! "x")
 
-  (enqueue-download! "https://www.youtube.com/watch?v=T4P7DDxnMTo")
+
+  ;; test the notify call (fails harmlessly outside HA)
+  (notify! {:url "u" :state :done :last "ok"})
+
+  ;; inspect the agent
+  (agent-error worker)                       ; nil when healthy
+  (await worker)                             ; block until the queue drains
+
+  ;; reset
+  (reset! jobs {})
 
   ())
