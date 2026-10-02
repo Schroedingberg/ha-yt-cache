@@ -1,7 +1,7 @@
 name: Builder
 
 env:
-  MONITORED_FILES: "config.json config.yaml config.yml Dockerfile rootfs"
+  MONITORED_FILES: "config.json config.yaml config.yml Dockerfile bb.edn src rootfs"
 
 on:
   pull_request:

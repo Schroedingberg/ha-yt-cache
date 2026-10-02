@@ -4,6 +4,7 @@ youtube-to-media/.calva/repl.calva-repl
 .lsp/.cache/db.transit.json
 .clj-kondo/
 youtube-to-media/.nrepl-port
+youtube-to-media/downloads/
 share/youtube-to-media/.calva/repl.calva-repl
 .gitignore
 share/youtube-to-media/.nrepl-port

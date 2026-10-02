@@ -1,4 +1,4 @@
-# Development manifest source. Omit image to build from the local Dockerfile.
+# Production manifest. Remove image locally to build from the Dockerfile.
 name: YouTube to Media
 version: "0.1.0"
 slug: youtube-to-media

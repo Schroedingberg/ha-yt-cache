@@ -3,5 +3,25 @@
  :description "A Home Assistant app to download YouTube videos to media."
  :version "0.1.0"
  :license "Apache-2.0"
+ :tasks
+ {start
+  {:doc "Start the local server. Optional port defaults to 8098."
+   :task (let [[requested-port] *command-line-args*
+               port (or requested-port "8098")]
+           (shell "env" (str "PORT=" port) "DOWNLOAD_DIRECTORY=downloads"
+                  "bb" "-m" "youtube-to-media.core"))}
+  download
+  {:doc "Submit a video URL to the running app. Optional base URL defaults to localhost:8099."
+   :requires ([babashka.http-client :as http])
+   :task (let [[url app-url] *command-line-args*
+               app-url (or app-url
+                           (System/getenv "YOUTUBE_TO_MEDIA_URL")
+                           "http://127.0.0.1:8099")]
+           (when-not url
+             (throw (ex-info "Usage: bb download <URL> [APP-URL]" {})))
+           (let [{:keys [status body]} (http/post (str app-url "/enqueue") {:body url})]
+             (when-not (= status 202)
+               (throw (ex-info (str "App rejected request with HTTP " status) {:body body})))
+             (println (str "Queued job: " body))))}}
  :deps {cheshire/cheshire {:mvn/version "5.13.0"}
         http-kit/http-kit {:mvn/version "2.8.0"}}}

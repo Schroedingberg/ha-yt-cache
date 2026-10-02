@@ -3,13 +3,19 @@
             [babashka.process :refer [process]]
             [babashka.http-client :as http]
             [cheshire.core :as json]
+            [clojure.string :as str]
             [org.httpkit.server :as srv]
             [clojure.java.io :as io]))
 
 (def download-directory (or (System/getenv "DOWNLOAD_DIRECTORY") "/share/youtube-to-media"))
 (defonce jobs (atom {}))
-(defonce worker (agent nil :error-mode :continue))
+(defonce worker-lock (Object.))
 (defonce server (atom nil))
+(defonce logged-progress (atom {}))
+
+(defn- log-event! [event details]
+  (println (pr-str (assoc details :event event)))
+  (flush))
 
 (defn set-job! [id & kvs]
   (swap! jobs update id #(apply assoc % kvs)))
@@ -23,7 +29,13 @@
 
 (defn- update-download-line! [id line]
   (if-let [[_ percent] (re-find #"(\d+(?:\.\d+)?)%" line)]
-    (set-job! id :progress (parse-double percent))
+    (let [progress (parse-double percent)
+          progress-bucket (long progress)
+          previous-bucket (get @logged-progress id -1)]
+      (set-job! id :progress progress)
+      (when (> progress-bucket previous-bucket)
+        (swap! logged-progress assoc id progress-bucket)
+        (log-event! :download/progress {:job-id id :percent progress-bucket})))
     (set-job! id :last line)))
 
 (defn- stream-download-output! [id output]
@@ -31,26 +43,46 @@
     (doseq [line (line-seq reader)]
       (update-download-line! id line))))
 
+(defn- redacted-error-line [job]
+  (when-let [line (:last job)]
+    (if-let [url (:url job)]
+      (str/replace line url "[redacted URL]")
+      line)))
+
 (defn download! [id]
   (fs/create-dirs download-directory)
   (set-job! id :state :downloading)
+  (log-event! :download/started {:job-id id})
   (let [download-process (process {:out :stream :err :out}
-                                  "uvx" "yt-dlp" "--no-continue" "--newline"
-                                  "-P" download-directory "--" (:url (@jobs id)))]
+                                  "uvx" "--from" "yt-dlp[default]" "yt-dlp"
+                                  "--no-continue" "--newline"
+                                  "-P" download-directory "--" (:url (@jobs id)))
+        exit-code (:exit @download-process)
+        state (if (zero? exit-code) :done :failed)]
     (stream-download-output! id (:out download-process))
-    (set-job! id :state (if (zero? (:exit @download-process)) :done :failed))
+    (set-job! id :state state)
+    (swap! logged-progress dissoc id)
+    (if (= state :done)
+      (log-event! :download/completed {:job-id id :exit-code exit-code})
+      (log-event! :download/failed
+                  {:job-id id
+                   :exit-code exit-code
+                   :error (redacted-error-line (@jobs id))}))
     (notify! (@jobs id))))
 
 (defn- run-job! [id]
   (try
     (download! id)
     (catch Exception error
-      (set-job! id :state :failed :last (ex-message error)))))
+      (set-job! id :state :failed :last (ex-message error))
+      (swap! logged-progress dissoc id)
+      (log-event! :download/error {:job-id id :error-type (str (class error))}))))
 
 (defn enqueue! [url]
   (let [id (str (random-uuid))]
     (swap! jobs assoc id {:url url :state :queued :progress 0})
-    (send-off worker (fn [_] (run-job! id)))
+    (log-event! :download/queued {:job-id id})
+    (future (locking worker-lock (run-job! id)))
     id))
 
 (def page "<!doctype html><meta charset=utf-8>
@@ -87,4 +119,5 @@
 (defn -main [& _]
   (let [port (parse-long (or (System/getenv "PORT") "8099"))]
     (start-server! port)
-    (println (str "HTTP server listening on port " port))))
+    (log-event! :server/started {:port port})
+    @(promise)))
