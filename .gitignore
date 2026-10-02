@@ -1,6 +1,9 @@
 .calva/repl.calva-repl
 .clj-kondo/.cache/v1/lock
-share/youtube-to-media/.calva/repl.calva-repl
+youtube-to-media/.calva/repl.calva-repl
 .lsp/.cache/db.transit.json
 .clj-kondo/
+youtube-to-media/.nrepl-port
+share/youtube-to-media/.calva/repl.calva-repl
+.gitignore
 share/youtube-to-media/.nrepl-port

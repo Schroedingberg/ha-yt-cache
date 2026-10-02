@@ -1,11 +1,12 @@
 (ns youtube-to-media.core
-  (:require [babashka.process :refer [process]]
+  (:require [babashka.fs :as fs]
+            [babashka.process :refer [process]]
             [babashka.http-client :as http]
             [cheshire.core :as json]
             [org.httpkit.server :as srv]
             [clojure.java.io :as io]))
 
-(def download-directory "./")
+(def download-directory (or (System/getenv "DOWNLOAD_DIRECTORY") "/share/youtube-to-media"))
 (defonce jobs (atom {}))
 (defonce worker (agent nil :error-mode :continue))
 (defonce server (atom nil))
@@ -21,7 +22,7 @@
     (catch Exception _ nil)))
 
 (defn- update-download-line! [id line]
-  (if-let [[_ percent] (re-find #"(\\d+(?:\\.\\d+)?)%" line)]
+  (if-let [[_ percent] (re-find #"(\d+(?:\.\d+)?)%" line)]
     (set-job! id :progress (parse-double percent))
     (set-job! id :last line)))
 
@@ -31,12 +32,13 @@
       (update-download-line! id line))))
 
 (defn download! [id]
+  (fs/create-dirs download-directory)
   (set-job! id :state :downloading)
-  (let [process (process {:out :stream :err :out}
-                         "uvx" "yt-dlp" "--no-continue" "--newline"
-                         "-P" download-directory "--" (:url (@jobs id)))]
-    (stream-download-output! id (:out process))
-    (set-job! id :state (if (zero? (:exit @process)) :done :failed))
+  (let [download-process (process {:out :stream :err :out}
+                                  "uvx" "yt-dlp" "--no-continue" "--newline"
+                                  "-P" download-directory "--" (:url (@jobs id)))]
+    (stream-download-output! id (:out download-process))
+    (set-job! id :state (if (zero? (:exit @download-process)) :done :failed))
     (notify! (@jobs id))))
 
 (defn- run-job! [id]
@@ -66,7 +68,8 @@
 (defn handler [{:keys [uri request-method body]}]
   (case [request-method uri]
     [:get "/"] {:headers {"Content-Type" "text/html"} :body page}
-    [:get "/jobs"] {:body (json/generate-string (vals @jobs))}
+    [:get "/jobs"] {:body
+                    (json/generate-string (vec (vals @jobs)))}
     [:post "/enqueue"] (enqueue-request body)
     {:status 404}))
 

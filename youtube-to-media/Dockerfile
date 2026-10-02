@@ -19,17 +19,18 @@ RUN \
 
 # Copy root filesystem
 COPY rootfs /
+COPY bb.edn /usr/share/youtube-to-media/
+COPY src /usr/share/youtube-to-media/src/
 
 LABEL \
-    org.opencontainers.image.title="Home Assistant App: Example app" \
-    org.opencontainers.image.description="Example app to use as a blueprint for new apps." \
-    org.opencontainers.image.source="https://github.com/home-assistant/apps-example" \
+    org.opencontainers.image.title="Home Assistant App: YouTube to Media" \
+    org.opencontainers.image.description="Download YouTube media to Home Assistant shared storage." \
+    org.opencontainers.image.source="https://github.com/Schroedingberg/ha-yt-cache" \
     org.opencontainers.image.licenses="Apache License 2.0"
 
 
 # Install latest babashka release
 RUN curl -sSLf raw.githubusercontent.com/babashka/babashka/master/install | bash
+RUN cd /usr/share/youtube-to-media && bb -e "(require 'youtube-to-media.core)"
 
-# Install latest uv in a directory available on PATH at runtime
-RUN curl -sSLf https://astral.sh/uv/install.sh | env UV_INSTALL_DIR=/usr/local/bin bash
-RUN apk add --no-cache deno ffmpeg sqlite
+RUN apk add --no-cache deno ffmpeg uv

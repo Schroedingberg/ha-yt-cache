@@ -16,7 +16,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Install App",
+      "label": "Production: Install Published App",
       "type": "shell",
       "command": "ha apps install \"local_${input:appName}\"",
       "group": {
@@ -30,7 +30,7 @@
       "problemMatcher": []
     },
     {
-      "label": "Start App",
+      "label": "Production: Start Published App",
       "type": "shell",
       "command": "ha apps stop \"local_${input:appName}\" || true; ha apps start \"local_${input:appName}\" && ha apps logs -f \"local_${input:appName}\"",
       "group": {
@@ -47,9 +47,9 @@
       }
     },
     {
-      "label": "Rebuild and Start App",
+      "label": "Production: Update Published App",
       "type": "shell",
-      "command": "ha apps stop \"local_${input:appName}\" || true; ha apps rebuild --force \"local_${input:appName}\" && ha apps start \"local_${input:appName}\" && ha apps logs -f \"local_${input:appName}\"",
+      "command": "ha apps update \"local_${input:appName}\"",
       "group": {
         "kind": "test",
         "isDefault": false
@@ -61,11 +61,15 @@
       "problemMatcher": []
     },
     {
-      "label": "Start YouTube Media Server",
+      "label": "Development: Start Local Server",
       "type": "shell",
       "command": "bb -m youtube-to-media.core",
       "options": {
-        "cwd": "${workspaceFolder}/share/youtube-to-media"
+        "cwd": "${workspaceFolder}/youtube-to-media",
+        "env": {
+          "PORT": "8098",
+          "DOWNLOAD_DIRECTORY": "${workspaceFolder}/youtube-to-media/downloads"
+        }
       },
       "presentation": {
         "reveal": "always",
@@ -80,7 +84,7 @@
       "type": "pickString",
       "description": "Name of app (to add your app to this list, please edit .vscode/tasks.json)",
       "options": [
-        "example"
+        "youtube-to-media"
       ]
     }
   ]

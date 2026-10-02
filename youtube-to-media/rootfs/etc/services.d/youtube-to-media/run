@@ -1,0 +1,12 @@
+#!/usr/bin/with-contenv bashio
+# shellcheck shell=bash
+# ==============================================================================
+# Start the YouTube to Media service
+# s6-overlay docs: https://github.com/just-containers/s6-overlay
+# ==============================================================================
+
+set -e
+
+cd /usr/share/youtube-to-media
+bashio::log.info "Starting YouTube to Media on port 8099"
+exec bb -m youtube-to-media.core

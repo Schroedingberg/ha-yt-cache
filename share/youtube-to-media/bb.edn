@@ -1,6 +1,0 @@
-{:paths ["." "src"]
- :name "youtube-to-media"
- :description "A Home Assistant app to download YouTube videos to media."
- :version "0.1.0"
- :author "Home Assistant"
- :license "Apache-2.0"}
