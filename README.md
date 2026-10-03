@@ -1,6 +1,6 @@
 # YouTube to Media Home Assistant App
 
-> WARNING: Don't rely on this yet. This is mostly a proof of concept for developing homeassistant apps in babashka. Use it at your own risk.
+> WARNING: Don't rely on this yet. This is mostly a proof of concept for developing homeassistant apps in clojure. Use it at your own risk.
 
 Downloads YouTube media into Home Assistant's persistent `/share/youtube-to-media` directory.
 
