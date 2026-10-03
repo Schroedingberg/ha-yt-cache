@@ -2,5 +2,6 @@
 
 ## 0.1.0
 
-- Package and run the YouTube to Media HTTP server as a Home Assistant app.
-- Store downloaded media in persistent shared storage.
+- Download YouTube media into Home Assistant shared storage.
+- Web UI served through Home Assistant ingress (authenticated).
+- Downloads run through yt-dlp with a proof-of-origin (PO) token provider to avoid YouTube HTTP 403 errors.
