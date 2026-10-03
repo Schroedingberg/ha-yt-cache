@@ -1,6 +1,6 @@
 # Home Assistant App: YouTube to Media
 
-The production app serves its web interface on port `8099`. Open it from the app page in Home Assistant. The local development server task runs the working tree on port `8098`.
+The production app is served through the Home Assistant frontend via ingress, so access is authenticated with your Home Assistant login. Open it from the app page in Home Assistant. The local development server task runs the working tree on port `8098`.
 
 Downloads are stored persistently in `/share/youtube-to-media`.
 

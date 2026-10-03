@@ -43,7 +43,7 @@
     (doseq [line (line-seq reader)]
       (update-download-line! id line))))
 
-(defn- redacted-error-line [job]
+(defn redacted-error-line [job]
   (when-let [line (:last job)]
     (if-let [url (:url job)]
       (str/replace line url "[redacted URL]")
@@ -96,19 +96,43 @@
 <script>setInterval(async()=>{o.textContent=(await(await fetch('jobs')).json())
 .map(x=>`${x.state} ${Math.round(x.progress)}% ${x.url} ${x.state=='failed'?x.last:''}`).join('\\n')},1500)</script>")
 
+(defn valid-url? [url]
+  (try
+    (let [parsed (java.net.URL. url)
+          protocol (.getProtocol parsed)
+          host (.getHost parsed)]
+      (and (#{"http" "https"} protocol)
+           host
+           (or (= host "youtu.be")
+               (= host "youtube.com")
+               (str/ends-with? host ".youtube.com"))))
+    (catch Exception _ false)))
+
 (defn- enqueue-request [body]
   (let [url (slurp body)]
-    (if (re-find #"^https?://" url)
+    (if (valid-url? url)
       {:status 202 :body (enqueue! url)}
       {:status 400 :body "invalid url"})))
 
-(defn handler [{:keys [uri request-method body]}]
-  (case [request-method uri]
-    [:get "/"] {:headers {"Content-Type" "text/html"} :body page}
-    [:get "/jobs"] {:body
-                    (json/generate-string (vec (vals @jobs)))}
-    [:post "/enqueue"] (enqueue-request body)
-    {:status 404}))
+(defn- request-authorized? [{:keys [headers]}]
+  (let [token (System/getenv "SUPERVISOR_TOKEN")
+        auth (get headers "authorization")
+        ingress-path (get headers "x-ingress-path")]
+    (or (nil? token)
+        (= auth (str "Bearer " token))
+        (some? ingress-path))))
+
+(defn handler [{:keys [uri request-method] :as request}]
+  (if (= [:get "/healthz"] [request-method uri])
+    {:status 200 :body (json/generate-string {:status "ok"})}
+    (if-not (request-authorized? request)
+      {:status 401 :body "unauthorized"}
+      (case [request-method uri]
+        [:get "/"] {:headers {"Content-Type" "text/html"} :body page}
+        [:get "/jobs"] {:body
+                        (json/generate-string (vec (vals @jobs)))}
+        [:post "/enqueue"] (enqueue-request (:body request))
+        {:status 404}))))
 
 (defn start-server!
   ([] (start-server! 8099))
