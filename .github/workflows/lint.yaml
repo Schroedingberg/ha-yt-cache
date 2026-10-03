@@ -41,9 +41,13 @@ jobs:
           path: "./${{ matrix.path }}"
 
       - name: 🔬 Lint Clojure code with clj-kondo
-        uses: docker://cljkondo/clj-kondo:2026.08.04
-        with:
-          args: --lint "${{ matrix.path }}/src" "${{ matrix.path }}/test"
+        env:
+          CLJ_KONDO_VERSION: 2026.08.04
+        run: |
+          curl -sSLf -o /tmp/clj-kondo.zip "https://github.com/clj-kondo/clj-kondo/releases/download/v${CLJ_KONDO_VERSION}/clj-kondo-${CLJ_KONDO_VERSION}-linux-amd64.zip"
+          unzip -q -o /tmp/clj-kondo.zip -d /tmp
+          chmod +x /tmp/clj-kondo
+          /tmp/clj-kondo --lint "${{ matrix.path }}/src" "${{ matrix.path }}/test"
 
       - name: 🧪 Run unit tests with Babashka
         env:
