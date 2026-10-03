@@ -24,30 +24,14 @@ LABEL \
     org.opencontainers.image.licenses="Apache License 2.0"
 
 
-# Install babashka (static binary from GitHub releases, pinned for reproducibility)
-ARG BABASHKA_VERSION=1.13.225
-RUN case "${TARGETARCH}" in \
-      amd64) bb_arch="amd64" ;; \
-      arm64) bb_arch="aarch64" ;; \
-      *) echo "Unsupported TARGETARCH: ${TARGETARCH}" && exit 1 ;; \
-    esac \
-    && set -e \
-    && for i in 1 2 3 4 5; do \
-         curl -sSLf -o /tmp/bb.tar.gz \
-           "https://github.com/babashka/babashka/releases/download/v${BABASHKA_VERSION}/babashka-${BABASHKA_VERSION}-linux-${bb_arch}-static.tar.gz" && break; \
-         echo "babashka download attempt ${i} failed, retrying..."; sleep 5; \
-       done \
-    && test -s /tmp/bb.tar.gz \
-    && tar -xzf /tmp/bb.tar.gz -C /usr/local/bin \
-    && rm -f /tmp/bb.tar.gz \
-    && bb --version
-
-RUN apk add --no-cache git nodejs npm ffmpeg uv
+# Run the app on the JVM + Clojure CLI so it works on both amd64 and aarch64
+# (babashka has no musl aarch64 build).
+RUN apk add --no-cache git nodejs npm ffmpeg uv clojure
 
 # Install the bgutil yt-dlp PO token provider (Node.js).
 # The native `canvas` dependency has no musl prebuild, so install its
 # build-time libraries for compiling from source on Alpine.
-RUN apk add --no-cache build-base python3 pkgconf cairo-dev pango-dev pixman-dev \
+RUN apk add --no-cache build-base python3 pkgconf cairo-dev pango-dev pixman-dev giflib-dev jpeg-dev \
     && set -e \
     && for i in 1 2 3 4 5; do \
          git clone --single-branch --branch 2.0.1 \
@@ -62,8 +46,8 @@ RUN apk add --no-cache build-base python3 pkgconf cairo-dev pango-dev pixman-dev
 
 # Copy root filesystem and application source
 COPY rootfs /
-COPY bb.edn /usr/share/youtube-to-media/
+COPY deps.edn /usr/share/youtube-to-media/
 COPY src /usr/share/youtube-to-media/src/
 
-# Verify the Babashka application loads
-RUN cd /usr/share/youtube-to-media && bb -e "(require 'youtube-to-media.core)"
+# Prime dependencies and verify the application loads on the JVM
+RUN cd /usr/share/youtube-to-media && clojure -P && clojure -M -e "(require 'youtube-to-media.core)"

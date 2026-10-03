@@ -6,6 +6,7 @@ description: Download YouTube media to Home Assistant shared storage.
 url: "https://github.com/Schroedingberg/ha-yt-cache/tree/main/youtube-to-media"
 image: "ghcr.io/schroedingberg/youtube-to-media"
 arch:
+  - aarch64
   - amd64
 init: false
 apparmor: false

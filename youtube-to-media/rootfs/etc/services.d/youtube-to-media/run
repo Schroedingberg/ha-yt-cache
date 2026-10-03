@@ -9,4 +9,4 @@ set -e
 
 cd /usr/share/youtube-to-media
 bashio::log.info "Starting YouTube to Media on port 8099"
-exec bb -m youtube-to-media.core
+exec clojure -M -m youtube-to-media.core

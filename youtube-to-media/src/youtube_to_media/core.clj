@@ -1,10 +1,10 @@
 (ns youtube-to-media.core
   (:require [babashka.fs :as fs]
             [babashka.process :refer [process]]
-            [babashka.http-client :as http]
             [cheshire.core :as json]
             [clojure.string :as str]
             [org.httpkit.server :as srv]
+            [org.httpkit.client :as http]
             [clojure.java.io :as io]))
 
 (def download-directory (or (System/getenv "DOWNLOAD_DIRECTORY") "/share/youtube-to-media"))
@@ -22,9 +22,9 @@
 
 (defn notify! [job]
   (try
-    (http/post "http://supervisor/core/api/events/download_manager_finished"
-               {:headers {"Authorization" (str "Bearer " (System/getenv "SUPERVISOR_TOKEN"))}
-                :body (json/generate-string (select-keys job [:url :state :last]))})
+    @(http/post "http://supervisor/core/api/events/download_manager_finished"
+                {:headers {"Authorization" (str "Bearer " (System/getenv "SUPERVISOR_TOKEN"))}
+                 :body (json/generate-string (select-keys job [:url :state :last]))})
     (catch Exception _ nil)))
 
 (defn- update-download-line! [id line]

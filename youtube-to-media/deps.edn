@@ -1,0 +1,13 @@
+{:paths ["src" "test"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.0"}
+        cheshire/cheshire {:mvn/version "5.13.0"}
+        http-kit/http-kit {:mvn/version "2.8.0"}
+        babashka/fs {:mvn/version "0.5.34"}
+        babashka/process {:mvn/version "0.6.25"}}
+ :aliases
+ {:test
+  {:extra-paths ["test"]
+   :main-opts ["-e"
+               "(require 'youtube-to-media.core-test)
+                (let [{:keys [fail error]} (clojure.test/run-tests 'youtube-to-media.core-test)]
+                  (when (pos? (+ fail error)) (System/exit 1)))"]}}}
