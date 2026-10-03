@@ -1,0 +1,8 @@
+# Local download output — large files, never needed in the image.
+downloads/
+
+# Editor / REPL / linter state.
+.calva/
+.clj-kondo/
+.lsp/
+.nrepl-port
