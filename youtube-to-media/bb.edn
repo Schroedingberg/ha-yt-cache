@@ -1,4 +1,4 @@
-{:paths ["src"]
+{:paths ["src" "test"]
  :name "youtube-to-media"
  :description "A Home Assistant app to download YouTube videos to media."
  :version "0.1.0"
@@ -19,9 +19,20 @@
                            "http://127.0.0.1:8099")]
            (when-not url
              (throw (ex-info "Usage: bb download <URL> [APP-URL]" {})))
-           (let [{:keys [status body]} (http/post (str app-url "/enqueue") {:body url})]
+           (let [token (System/getenv "SUPERVISOR_TOKEN")
+                 {:keys [status body]} (http/post (str app-url "/enqueue")
+                                                  (cond-> {:body url}
+                                                    token (assoc :headers {"Authorization" (str "Bearer " token)})))]
              (when-not (= status 202)
                (throw (ex-info (str "App rejected request with HTTP " status) {:body body})))
-             (println (str "Queued job: " body))))}}
+             (println (str "Queued job: " body))))}
+  test
+  {:doc "Run the unit tests."
+   :requires ([clojure.test :as t])
+   :task (do
+           (require 'youtube-to-media.core-test)
+           (let [{:keys [fail error]} (t/run-tests 'youtube-to-media.core-test)]
+             (when (pos? (+ fail error))
+               (System/exit 1))))}}
  :deps {cheshire/cheshire {:mvn/version "5.13.0"}
         http-kit/http-kit {:mvn/version "2.8.0"}}}
