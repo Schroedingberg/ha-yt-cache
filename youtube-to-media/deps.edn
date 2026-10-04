@@ -8,6 +8,11 @@
  {:test
   {:extra-paths ["test"]
    :main-opts ["-e"
-               "(require 'youtube-to-media.core-test)
-                (let [{:keys [fail error]} (clojure.test/run-tests 'youtube-to-media.core-test)]
+               "(require 'youtube-to-media.core-test
+                         'youtube-to-media.http-test
+                         'youtube-to-media.download-test)
+                (let [{:keys [fail error]}
+                      (clojure.test/run-tests 'youtube-to-media.core-test
+                                              'youtube-to-media.http-test
+                                              'youtube-to-media.download-test)]
                   (when (pos? (+ fail error)) (System/exit 1)))"]}}}

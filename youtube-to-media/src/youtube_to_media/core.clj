@@ -8,6 +8,8 @@
             [clojure.java.io :as io]))
 
 (def download-directory (or (System/getenv "DOWNLOAD_DIRECTORY") "/share/youtube-to-media"))
+;; Seam for tests: swap this out to fake the subprocess runner.
+(def process-fn process)
 (defonce jobs (atom {}))
 (defonce worker-lock (Object.))
 (defonce server (atom nil))
@@ -53,15 +55,15 @@
   (fs/create-dirs download-directory)
   (set-job! id :state :downloading)
   (log-event! :download/started {:job-id id})
-  (let [download-process (process {:out :stream :err :out}
-                                  "uvx" "--from" "yt-dlp[default]"
-                                  "--with" "bgutil-ytdlp-pot-provider"
-                                  "yt-dlp"
-                                  "--no-continue" "--newline"
-                                  "--js-runtimes" "node"
-                                  "--extractor-args" "youtube:player_client=mweb,web_embedded,web_safari"
-                                  "--extractor-args" "youtubepot-bgutilscript:server_home=/usr/share/bgutil-ytdlp-pot-provider/server"
-                                  "-P" download-directory "--" (:url (@jobs id)))
+  (let [download-process (process-fn {:out :stream :err :out}
+                                     "uvx" "--from" "yt-dlp[default]"
+                                     "--with" "bgutil-ytdlp-pot-provider"
+                                     "yt-dlp"
+                                     "--no-continue" "--newline"
+                                     "--js-runtimes" "node"
+                                     "--extractor-args" "youtube:player_client=mweb,web_embedded,web_safari"
+                                     "--extractor-args" "youtubepot-bgutilscript:server_home=/usr/share/bgutil-ytdlp-pot-provider/server"
+                                     "-P" download-directory "--" (:url (@jobs id)))
         exit-code (:exit @download-process)
         state (if (zero? exit-code) :done :failed)]
     (stream-download-output! id (:out download-process))

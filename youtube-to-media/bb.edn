@@ -30,8 +30,13 @@
   {:doc "Run the unit tests."
    :requires ([clojure.test :as t])
    :task (do
-           (require 'youtube-to-media.core-test)
-           (let [{:keys [fail error]} (t/run-tests 'youtube-to-media.core-test)]
+           (require 'youtube-to-media.core-test
+                    'youtube-to-media.http-test
+                    'youtube-to-media.download-test)
+           (let [{:keys [fail error]}
+                 (t/run-tests 'youtube-to-media.core-test
+                              'youtube-to-media.http-test
+                              'youtube-to-media.download-test)]
              (when (pos? (+ fail error))
                (System/exit 1))))}
   dev
@@ -40,18 +45,18 @@
                sub (or sub "run")
                image "yt2m-dev"
                share (or (System/getenv "SHARE") "/mnt/supervisor/share")]
-         (case sub
-           "build" (shell "docker" "build" "-t" image ".")
-           "run" (do
-                   (shell "docker" "build" "-t" image ".")
-                   (shell {:continue true :out :string :err :string} "docker" "rm" "-f" "yt2m-dev")
-                   (shell "docker" "run" "-d" "--name" "yt2m-dev" "-p" "8099:8099"
-                          "-v" (str share ":/share")
-                          "-e" "DOWNLOAD_DIRECTORY=/share/youtube-to-media"
-                          "-e" "PORT=8099"
-                          image))
-           "logs" (shell "docker" "logs" "-f" "yt2m-dev")
-           "stop" (shell {:continue true} "docker" "rm" "-f" "yt2m-dev")
-           (println "Usage: bb dev [build|run|logs|stop]")))}}
+           (case sub
+             "build" (shell "docker" "build" "-t" image ".")
+             "run" (do
+                     (shell "docker" "build" "-t" image ".")
+                     (shell {:continue true :out :string :err :string} "docker" "rm" "-f" "yt2m-dev")
+                     (shell "docker" "run" "-d" "--name" "yt2m-dev" "-p" "8099:8099"
+                            "-v" (str share ":/share")
+                            "-e" "DOWNLOAD_DIRECTORY=/share/youtube-to-media"
+                            "-e" "PORT=8099"
+                            image))
+             "logs" (shell "docker" "logs" "-f" "yt2m-dev")
+             "stop" (shell {:continue true} "docker" "rm" "-f" "yt2m-dev")
+             (println "Usage: bb dev [build|run|logs|stop]")))}}
  :deps {cheshire/cheshire {:mvn/version "5.13.0"}
         http-kit/http-kit {:mvn/version "2.8.0"}}}

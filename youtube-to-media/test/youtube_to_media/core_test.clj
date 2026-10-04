@@ -32,6 +32,16 @@
            (core/redacted-error-line
             {:url "https://youtube.com/watch?v=abc"
              :last "ERROR: https://youtube.com/watch?v=abc: failed"}))))
+  (testing "redacts URLs containing regex metacharacters as literal text"
+    ;; On the JVM runtime, str/replace compiles its match argument as a regex.
+    ;; A URL containing regex metacharacters (`+`) must still be matched as a
+    ;; literal string, or the raw URL leaks into error events.
+    (let [url "https://youtube.com/watch?v=abc+def"]
+      (is (= "ERROR: [redacted URL]: failed"
+             (core/redacted-error-line
+              {:url url :last (str "ERROR: " url ": failed")})))
+      (is (= "[redacted URL]"
+             (core/redacted-error-line {:url url :last url})))))
   (testing "returns nil when there is no last line"
     (is (nil? (core/redacted-error-line {:url "https://youtube.com/"}))))
   (testing "returns the line unchanged when the job has no url"

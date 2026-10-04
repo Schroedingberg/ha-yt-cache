@@ -49,12 +49,19 @@ jobs:
           chmod +x /tmp/clj-kondo
           /tmp/clj-kondo --lint "${{ matrix.path }}/src" "${{ matrix.path }}/test"
 
-      - name: 🧪 Run unit tests with Babashka
-        env:
-          BABASHKA_VERSION: 1.13.225
+      - name: ☕ Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: 🧰 Install Clojure CLI
         run: |
-          curl -sSLf -o /tmp/bb.tar.gz "https://github.com/babashka/babashka/releases/download/v${BABASHKA_VERSION}/babashka-${BABASHKA_VERSION}-linux-amd64-static.tar.gz"
-          tar -xzf /tmp/bb.tar.gz -C /tmp
-          chmod +x /tmp/bb
+          curl -L -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
+          chmod +x linux-install.sh
+          sudo ./linux-install.sh
+
+      - name: 🧪 Run unit tests (JVM)
+        run: |
           cd "${{ matrix.path }}"
-          /tmp/bb test
+          clojure -M:test
