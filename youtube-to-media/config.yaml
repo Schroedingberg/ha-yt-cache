@@ -1,6 +1,6 @@
 # Production manifest. Remove image locally to build from the Dockerfile.
 name: YouTube to Media
-version: "0.1.0"
+version: "0.2.0"
 slug: youtube-to-media
 description: Download YouTube media to Home Assistant shared storage.
 url: "https://github.com/Schroedingberg/ha-yt-cache/tree/main/youtube-to-media"
