@@ -26,7 +26,6 @@
 (defonce jobs (atom {}))
 (defonce job-queue (java.util.concurrent.LinkedBlockingQueue.))
 (defonce server (atom nil))
-(defonce logged-progress (atom {}))
 
 (defn- log-event! [event details]
   (println (pr-str (assoc details :event event)))
@@ -47,16 +46,18 @@
                  :timeout 5000})
     (catch Exception _ nil)))
 
-(defn- update-download-line! [id line]
+(defn- update-download-line!
+  "Update job id from a line of yt-dlp output: progress lines set :progress
+  (logging once per whole percent); all other lines go to :last."
+  [id line]
   (if-let [[_ percent] (re-find #"(\d+(?:\.\d+)?)%" line)]
     (let [progress (parse-double percent)
-          progress-bucket (long progress)
-          previous-bucket (get @logged-progress id -1)]
+          bucket (long progress)
+          ;; Read the last recorded percent before overwriting it below.
+          previous (long (get-in @jobs [id :progress] 0))]
       (set-job! id :progress progress)
-      ;; Emit at most one progress event per whole percent.
-      (when (> progress-bucket previous-bucket)
-        (swap! logged-progress assoc id progress-bucket)
-        (log-event! :download/progress {:job-id id :percent progress-bucket})))
+      (when (> bucket previous)
+        (log-event! :download/progress {:job-id id :percent bucket})))
     (set-job! id :last line)))
 
 (defn- stream-download-output! [id output]
@@ -70,7 +71,8 @@
   (fs/create-dirs download-directory)
   (set-job! id :state :downloading)
   (log-event! :download/started {:job-id id})
-  (let [download-process (apply process-fn {:out :stream :err :out} (download-args (:url (@jobs id))))
+  (let [url (:url (get @jobs id))
+        download-process (apply process-fn {:out :stream :err :out} (download-args url))
         ;; Read output on a separate thread so a slow reader can't deadlock
         ;; the subprocess (whose stdout pipe fills up).
         output-future (future (stream-download-output! id (:out download-process)))
@@ -78,21 +80,18 @@
         state (if (zero? exit-code) :done :failed)]
     @output-future
     (set-job! id :state state)
-    (swap! logged-progress dissoc id)
-    (case state
-      :done   (log-event! :download/completed {:job-id id :exit-code exit-code})
-      :failed (log-event! :download/failed
-                          {:job-id id
-                           :exit-code exit-code
-                           :error (:last (@jobs id))}))
-    (notify! (@jobs id))))
+    (let [job (get @jobs id)]
+      (case state
+        :done   (log-event! :download/completed {:job-id id :exit-code exit-code})
+        :failed (log-event! :download/failed
+                            {:job-id id :exit-code exit-code :error (:last job)}))
+      (notify! job))))
 
 (defn- run-job! [id]
   (try
     (download! id)
     (catch Exception error
       (set-job! id :state :failed :last (ex-message error))
-      (swap! logged-progress dissoc id)
       (log-event! :download/error {:job-id id :error-type (str (class error))}))))
 
 (defonce download-worker

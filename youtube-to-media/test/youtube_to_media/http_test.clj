@@ -41,7 +41,6 @@
 (use-fixtures :each
   (fn [f]
     (reset! core/jobs {})
-    (reset! core/logged-progress {})
     (f)))
 
 (deftest healthz-test

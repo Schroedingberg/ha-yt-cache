@@ -6,7 +6,6 @@
 (use-fixtures :each
   (fn [f]
     (reset! core/jobs {})
-    (reset! core/logged-progress {})
     (f)))
 
 (defn- blocking-process [in exit]
