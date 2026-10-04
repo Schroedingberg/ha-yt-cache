@@ -48,7 +48,7 @@
 (defn redacted-error-line [job]
   (when-let [line (:last job)]
     (if-let [url (:url job)]
-      (str/replace line url "[redacted URL]")
+      (str/replace line (re-pattern (java.util.regex.Pattern/quote url)) "[redacted URL]")
       line)))
 
 (defn download! [id]
