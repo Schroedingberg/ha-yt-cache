@@ -133,6 +133,7 @@
 
 (defn- enqueue-request [body]
   (let [limit 8192
+        ;; Read limit+1 bytes: getting them all means the body is over the limit.
         bytes (.readNBytes ^java.io.InputStream (io/input-stream body) (inc limit))
         url (String. bytes 0 (min (alength bytes) limit) "UTF-8")]
     (cond
@@ -158,8 +159,7 @@
       {:status 401 :body "unauthorized"}
       (case [request-method uri]
         [:get "/"] {:headers {"Content-Type" "text/html"} :body page}
-        [:get "/jobs"] {:body
-                        (json/generate-string (vec (vals @jobs)))}
+        [:get "/jobs"] {:body (json/generate-string (vec (vals @jobs)))}
         [:post "/enqueue"] (enqueue-request (:body request))
         {:status 404}))))
 
