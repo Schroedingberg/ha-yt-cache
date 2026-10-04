@@ -61,8 +61,14 @@
 
 (deftest enqueue-rejects-invalid-url-test
   (let [{:keys [status]} (core/handler (request :post "/enqueue"
-                                                :body (java.io.StringReader. "not a url")))]
+                                                :body (java.io.ByteArrayInputStream. (.getBytes "not a url"))))]
     (is (= 400 status))))
+
+(deftest enqueue-rejects-oversized-body-test
+  (let [{:keys [status]} (core/handler (request :post "/enqueue"
+                                                :body (java.io.ByteArrayInputStream.
+                                                       (.getBytes (apply str (repeat 9000 "a"))))))]
+    (is (= 413 status))))
 
 (deftest unknown-route-404-test
   (let [{:keys [status]} (core/handler (request :get "/nope"))]
@@ -76,7 +82,8 @@
                   core/download-directory (str (fs/create-temp-dir))]
       (let [{:keys [status body]} (core/handler
                                    (request :post "/enqueue"
-                                            :body (java.io.StringReader. "https://youtube.com/watch?v=abc")))
+                                            :body (java.io.ByteArrayInputStream.
+                                                   (.getBytes "https://youtube.com/watch?v=abc"))))
             id body]
         (is (= 202 status))
         (is (string? id))

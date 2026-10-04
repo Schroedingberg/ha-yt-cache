@@ -113,10 +113,13 @@
     (catch Exception _ false)))
 
 (defn- enqueue-request [body]
-  (let [url (slurp body)]
-    (if (valid-url? url)
-      {:status 202 :body (enqueue! url)}
-      {:status 400 :body "invalid url"})))
+  (let [limit 8192
+        bytes (.readNBytes ^java.io.InputStream (io/input-stream body) (inc limit))
+        url (String. bytes 0 (min (alength bytes) limit) "UTF-8")]
+    (cond
+      (> (alength bytes) limit) {:status 413 :body "body too large"}
+      (valid-url? url) {:status 202 :body (enqueue! url)}
+      :else {:status 400 :body "invalid url"})))
 
 (defn- request-authorized? [{:keys [headers]}]
   (let [token (System/getenv "SUPERVISOR_TOKEN")
