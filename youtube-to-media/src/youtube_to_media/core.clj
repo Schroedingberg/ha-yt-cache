@@ -7,9 +7,9 @@
             [org.httpkit.client :as http]
             [clojure.java.io :as io]))
 
+;;; Configuration
+
 (def download-directory (or (System/getenv "DOWNLOAD_DIRECTORY") "/share/youtube-to-media"))
-;; Seam for tests: swap this out to fake the subprocess runner.
-(def process-fn process)
 
 (def ^:private yt-dlp-command
   ["uvx" "--from" "yt-dlp[default]"
@@ -20,12 +20,45 @@
    "--extractor-args" "youtube:player_client=mweb,web_embedded,web_safari"
    "--extractor-args" "youtubepot-bgutilscript:server_home=/usr/share/bgutil-ytdlp-pot-provider/server"])
 
-(defn- download-args [url]
-  (into yt-dlp-command ["-P" download-directory "--" url]))
+;;; Pure helpers (no side effects, no global state)
+
+(defn valid-url?
+  "True when url is an http(s) URL on YouTube or a YouTube subdomain."
+  [url]
+  (try
+    (let [parsed (java.net.URL. url)
+          protocol (.getProtocol parsed)
+          host (.getHost parsed)]
+      (and (#{"http" "https"} protocol)
+           host
+           (or (= host "youtu.be")
+               (= host "youtube.com")
+               (str/ends-with? host ".youtube.com"))))
+    (catch Exception _ false)))
+
+(def ^:private progress-re #"(\d+(?:\.\d+)?)%")
+
+(defn- percent-in
+  "Return the progress percentage parsed from line, or nil when it has none."
+  [line]
+  (when-let [[_ pct] (re-find progress-re line)]
+    (parse-double pct)))
+
+(defn- download-args
+  "The yt-dlp command line for downloading url into dir."
+  [dir url]
+  (into yt-dlp-command ["-P" dir "--" url]))
+
+;;; State
 
 (defonce jobs (atom {}))
 (defonce job-queue (java.util.concurrent.LinkedBlockingQueue.))
 (defonce server (atom nil))
+
+;; Seam for tests: swap this out to fake the subprocess runner.
+(def process-fn process)
+
+;;; Effects (the imperative shell)
 
 (defn- log-event! [event details]
   (println (pr-str (assoc details :event event)))
@@ -50,9 +83,8 @@
   "Update job id from a line of yt-dlp output: progress lines set :progress
   (logging once per whole percent); all other lines go to :last."
   [id line]
-  (if-let [[_ percent] (re-find #"(\d+(?:\.\d+)?)%" line)]
-    (let [progress (parse-double percent)
-          bucket (long progress)
+  (if-let [progress (percent-in line)]
+    (let [bucket (long progress)
           ;; Read the last recorded percent before overwriting it below.
           previous (long (get-in @jobs [id :progress] 0))]
       (set-job! id :progress progress)
@@ -72,7 +104,7 @@
   (set-job! id :state :downloading)
   (log-event! :download/started {:job-id id})
   (let [url (:url (get @jobs id))
-        download-process (apply process-fn {:out :stream :err :out} (download-args url))
+        download-process (apply process-fn {:out :stream :err :out} (download-args download-directory url))
         ;; Read output on a separate thread so a slow reader can't deadlock
         ;; the subprocess (whose stdout pipe fills up).
         output-future (future (stream-download-output! id (:out download-process)))
@@ -116,20 +148,6 @@
 <input id=u size=60> <button>Add</button></form><pre id=o></pre>
 <script>setInterval(async()=>{o.textContent=(await(await fetch('jobs')).json())
 .map(x=>`${x.state} ${Math.round(x.progress)}% ${x.url} ${x.state=='failed'?x.last:''}`).join('\\n')},1500)</script>")
-
-(defn valid-url?
-  "True when url is an http(s) URL on YouTube or a YouTube subdomain."
-  [url]
-  (try
-    (let [parsed (java.net.URL. url)
-          protocol (.getProtocol parsed)
-          host (.getHost parsed)]
-      (and (#{"http" "https"} protocol)
-           host
-           (or (= host "youtu.be")
-               (= host "youtube.com")
-               (str/ends-with? host ".youtube.com"))))
-    (catch Exception _ false)))
 
 (defn- enqueue-request [body]
   (let [limit 8192
