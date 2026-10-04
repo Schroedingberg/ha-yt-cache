@@ -10,6 +10,19 @@
 (def download-directory (or (System/getenv "DOWNLOAD_DIRECTORY") "/share/youtube-to-media"))
 ;; Seam for tests: swap this out to fake the subprocess runner.
 (def process-fn process)
+
+(def ^:private yt-dlp-command
+  ["uvx" "--from" "yt-dlp[default]"
+   "--with" "bgutil-ytdlp-pot-provider"
+   "yt-dlp"
+   "--no-continue" "--newline"
+   "--js-runtimes" "node"
+   "--extractor-args" "youtube:player_client=mweb,web_embedded,web_safari"
+   "--extractor-args" "youtubepot-bgutilscript:server_home=/usr/share/bgutil-ytdlp-pot-provider/server"])
+
+(defn- download-args [url]
+  (into yt-dlp-command ["-P" download-directory "--" url]))
+
 (defonce jobs (atom {}))
 (defonce worker-lock (Object.))
 (defonce server (atom nil))
@@ -19,10 +32,14 @@
   (println (pr-str (assoc details :event event)))
   (flush))
 
-(defn set-job! [id & kvs]
+(defn- set-job!
+  "Merge key/value pairs into job id's state."
+  [id & kvs]
   (swap! jobs update id #(apply assoc % kvs)))
 
-(defn notify! [job]
+(defn notify!
+  "Post job completion to the supervisor's download_manager_finished event."
+  [job]
   (try
     @(http/post "http://supervisor/core/api/events/download_manager_finished"
                 {:headers {"Authorization" (str "Bearer " (System/getenv "SUPERVISOR_TOKEN"))}
@@ -36,6 +53,7 @@
           progress-bucket (long progress)
           previous-bucket (get @logged-progress id -1)]
       (set-job! id :progress progress)
+      ;; Emit at most one progress event per whole percent.
       (when (> progress-bucket previous-bucket)
         (swap! logged-progress assoc id progress-bucket)
         (log-event! :download/progress {:job-id id :percent progress-bucket})))
@@ -46,31 +64,27 @@
     (doseq [line (line-seq reader)]
       (update-download-line! id line))))
 
-(defn download! [id]
+(defn download!
+  "Run yt-dlp for job id, streaming output and recording the outcome."
+  [id]
   (fs/create-dirs download-directory)
   (set-job! id :state :downloading)
   (log-event! :download/started {:job-id id})
-  (let [download-process (process-fn {:out :stream :err :out}
-                                     "uvx" "--from" "yt-dlp[default]"
-                                     "--with" "bgutil-ytdlp-pot-provider"
-                                     "yt-dlp"
-                                     "--no-continue" "--newline"
-                                     "--js-runtimes" "node"
-                                     "--extractor-args" "youtube:player_client=mweb,web_embedded,web_safari"
-                                     "--extractor-args" "youtubepot-bgutilscript:server_home=/usr/share/bgutil-ytdlp-pot-provider/server"
-                                     "-P" download-directory "--" (:url (@jobs id)))
+  (let [download-process (apply process-fn {:out :stream :err :out} (download-args (:url (@jobs id))))
+        ;; Read output on a separate thread so a slow reader can't deadlock
+        ;; the subprocess (whose stdout pipe fills up).
         output-future (future (stream-download-output! id (:out download-process)))
         exit-code (:exit @download-process)
         state (if (zero? exit-code) :done :failed)]
     @output-future
     (set-job! id :state state)
     (swap! logged-progress dissoc id)
-    (if (= state :done)
-      (log-event! :download/completed {:job-id id :exit-code exit-code})
-      (log-event! :download/failed
-                  {:job-id id
-                   :exit-code exit-code
-                   :error (:last (@jobs id))}))
+    (case state
+      :done   (log-event! :download/completed {:job-id id :exit-code exit-code})
+      :failed (log-event! :download/failed
+                          {:job-id id
+                           :exit-code exit-code
+                           :error (:last (@jobs id))}))
     (notify! (@jobs id))))
 
 (defn- run-job! [id]
@@ -81,7 +95,9 @@
       (swap! logged-progress dissoc id)
       (log-event! :download/error {:job-id id :error-type (str (class error))}))))
 
-(defn enqueue! [url]
+(defn enqueue!
+  "Queue url for download and return the new job id."
+  [url]
   (let [id (str (random-uuid))]
     (swap! jobs assoc id {:url url :state :queued :progress 0})
     (log-event! :download/queued {:job-id id})
@@ -94,7 +110,9 @@
 <script>setInterval(async()=>{o.textContent=(await(await fetch('jobs')).json())
 .map(x=>`${x.state} ${Math.round(x.progress)}% ${x.url} ${x.state=='failed'?x.last:''}`).join('\\n')},1500)</script>")
 
-(defn valid-url? [url]
+(defn valid-url?
+  "True when url is an http(s) URL on YouTube or a YouTube subdomain."
+  [url]
   (try
     (let [parsed (java.net.URL. url)
           protocol (.getProtocol parsed)
@@ -119,11 +137,14 @@
   (let [token (System/getenv "SUPERVISOR_TOKEN")
         auth (get headers "authorization")
         ingress-path (get headers "x-ingress-path")]
+    ;; With no token configured (local dev), allow all requests.
     (or (nil? token)
         (= auth (str "Bearer " token))
         (some? ingress-path))))
 
-(defn handler [{:keys [uri request-method] :as request}]
+(defn handler
+  "Ring handler for the web UI and JSON API."
+  [{:keys [uri request-method] :as request}]
   (if (= [:get "/healthz"] [request-method uri])
     {:status 200 :body (json/generate-string {:status "ok"})}
     (if-not (request-authorized? request)
@@ -136,12 +157,15 @@
         {:status 404}))))
 
 (defn start-server!
+  "Start the HTTP server once, defaulting to port 8099."
   ([] (start-server! 8099))
   ([port]
    (or @server
        (reset! server (srv/run-server handler {:port port})))))
 
-(defn stop-server! []
+(defn stop-server!
+  "Stop the HTTP server if it is running."
+  []
   (when-let [stop! @server]
     (stop!)
     (reset! server nil)))
@@ -150,4 +174,5 @@
   (let [port (parse-long (or (System/getenv "PORT") "8099"))]
     (start-server! port)
     (log-event! :server/started {:port port})
+    ;; Block the main thread forever; the server runs on its own threads.
     @(promise)))
