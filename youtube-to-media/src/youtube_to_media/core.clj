@@ -26,7 +26,8 @@
   (try
     @(http/post "http://supervisor/core/api/events/download_manager_finished"
                 {:headers {"Authorization" (str "Bearer " (System/getenv "SUPERVISOR_TOKEN"))}
-                 :body (json/generate-string (select-keys job [:url :state :last]))})
+                 :body (json/generate-string (select-keys job [:url :state :last]))
+                 :timeout 5000})
     (catch Exception _ nil)))
 
 (defn- update-download-line! [id line]
