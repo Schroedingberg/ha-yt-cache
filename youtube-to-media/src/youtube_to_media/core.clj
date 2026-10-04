@@ -24,7 +24,7 @@
   (into yt-dlp-command ["-P" download-directory "--" url]))
 
 (defonce jobs (atom {}))
-(defonce worker-lock (Object.))
+(defonce job-queue (java.util.concurrent.LinkedBlockingQueue.))
 (defonce server (atom nil))
 (defonce logged-progress (atom {}))
 
@@ -95,13 +95,21 @@
       (swap! logged-progress dissoc id)
       (log-event! :download/error {:job-id id :error-type (str (class error))}))))
 
+(defonce download-worker
+  ;; One daemon thread runs queued jobs one at a time, in FIFO order.
+  (doto (Thread. (fn []
+                   (while true
+                     (run-job! (.take ^java.util.concurrent.BlockingQueue job-queue)))))
+    (.setDaemon true)
+    (.start)))
+
 (defn enqueue!
   "Queue url for download and return the new job id."
   [url]
   (let [id (str (random-uuid))]
     (swap! jobs assoc id {:url url :state :queued :progress 0})
     (log-event! :download/queued {:job-id id})
-    (future (locking worker-lock (run-job! id)))
+    (.put job-queue id)
     id))
 
 (def page "<!doctype html><meta charset=utf-8>
