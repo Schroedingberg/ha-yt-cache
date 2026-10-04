@@ -64,9 +64,10 @@
                                      "--extractor-args" "youtube:player_client=mweb,web_embedded,web_safari"
                                      "--extractor-args" "youtubepot-bgutilscript:server_home=/usr/share/bgutil-ytdlp-pot-provider/server"
                                      "-P" download-directory "--" (:url (@jobs id)))
+        output-future (future (stream-download-output! id (:out download-process)))
         exit-code (:exit @download-process)
         state (if (zero? exit-code) :done :failed)]
-    (stream-download-output! id (:out download-process))
+    @output-future
     (set-job! id :state state)
     (swap! logged-progress dissoc id)
     (if (= state :done)

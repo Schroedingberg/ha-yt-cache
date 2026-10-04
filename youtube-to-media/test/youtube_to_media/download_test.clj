@@ -40,5 +40,6 @@
                     core/log-event! (fn [& _] nil)
                     core/download-directory (str (fs/create-temp-dir))]
         (let [result (future (core/download! id))]
-          (is (= ::done (deref result 3000 ::timeout))
-              "download! must consume process output concurrently and complete"))))))
+          (is (not= ::timeout (deref result 3000 ::timeout))
+              "download! must consume process output concurrently and complete")
+          (is (= :done (:state (get @core/jobs id)))))))))
