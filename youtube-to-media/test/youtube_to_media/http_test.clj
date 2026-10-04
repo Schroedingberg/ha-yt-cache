@@ -91,3 +91,19 @@
         (let [job (job-by-id id)]
           (is (= :done (:state job)))
           (is (= 100.0 (:progress job))))))))
+
+(deftest enqueue-job-fails-when-download-throws-test
+  (testing "a thrown download error marks the job failed with the message"
+    (with-redefs [core/process-fn (fn [& _] (throw (ex-info "boom" {})))
+                  core/notify! (fn [_] nil)
+                  core/log-event! (fn [& _] nil)
+                  core/download-directory (str (fs/create-temp-dir))]
+      (let [{:keys [status body]} (core/handler
+                                   (request :post "/enqueue"
+                                            :body (java.io.ByteArrayInputStream.
+                                                   (.getBytes "https://youtube.com/watch?v=abc"))))
+            id body]
+        (is (= 202 status))
+        (is (true? (poll-until #(= :failed (:state (job-by-id id))) 5000))
+            "job should reach :failed within the timeout")
+        (is (= "boom" (:last (job-by-id id))))))))

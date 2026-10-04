@@ -42,3 +42,27 @@
           (is (not= ::timeout (deref result 3000 ::timeout))
               "download! must consume process output concurrently and complete")
           (is (= :done (:state (get @core/jobs id)))))))))
+
+(defn- exited-process [exit-code out]
+  (reify
+    clojure.lang.IDeref
+    (deref [_] {:exit exit-code})
+    clojure.lang.ILookup
+    (valAt [_ k] (when (= k :out) out))
+    (valAt [_ k not-found] (if (= k :out) out not-found))))
+
+(deftest download-failure-marks-job-failed-test
+  (testing "a non-zero exit leaves the job failed with the last output line"
+    (let [id (str (random-uuid))
+          out (java.io.ByteArrayInputStream. (.getBytes "ERROR: unable to download\n" "UTF-8"))]
+      (swap! core/jobs assoc id {:url "https://youtube.com/watch?v=abc"
+                                 :state :queued
+                                 :progress 0})
+      (with-redefs [core/process-fn (fn [& _] (exited-process 1 out))
+                    core/notify! (fn [_] nil)
+                    core/log-event! (fn [& _] nil)
+                    core/download-directory (str (fs/create-temp-dir))]
+        (core/download! id)
+        (let [job (get @core/jobs id)]
+          (is (= :failed (:state job)))
+          (is (= "ERROR: unable to download" (:last job))))))))
