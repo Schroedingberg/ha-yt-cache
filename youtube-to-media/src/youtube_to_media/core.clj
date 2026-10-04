@@ -46,12 +46,6 @@
     (doseq [line (line-seq reader)]
       (update-download-line! id line))))
 
-(defn redacted-error-line [job]
-  (when-let [line (:last job)]
-    (if-let [url (:url job)]
-      (str/replace line (re-pattern (java.util.regex.Pattern/quote url)) "[redacted URL]")
-      line)))
-
 (defn download! [id]
   (fs/create-dirs download-directory)
   (set-job! id :state :downloading)
@@ -76,7 +70,7 @@
       (log-event! :download/failed
                   {:job-id id
                    :exit-code exit-code
-                   :error (redacted-error-line (@jobs id))}))
+                   :error (:last (@jobs id))}))
     (notify! (@jobs id))))
 
 (defn- run-job! [id]
